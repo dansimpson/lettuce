@@ -2,13 +2,20 @@
 
 package com.lambdaworks.redis;
 
-import com.lambdaworks.redis.pubsub.*;
-import org.junit.*;
-
-import java.util.concurrent.*;
-
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertNull;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.lambdaworks.redis.pubsub.RedisPubSubAdapter;
+import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
+import com.lambdaworks.redis.pubsub.RedisPubSubListener;
 
 public class PubSubCommandTest extends AbstractCommandTest implements RedisPubSubListener<String, String> {
     private RedisPubSubConnection<String, String> pubsub;
@@ -181,6 +188,34 @@ public class PubSubCommandTest extends AbstractCommandTest implements RedisPubSu
 
         assertEquals(0L, (long) localCounts.take());
     }
+    
+    @Test(timeout = 500)
+    public void throughput() throws Exception {
+    	
+    	String resonablyLongMessage = new String(new byte[256]);
+    	
+        pubsub.subscribe(channel);
+        assertEquals(1L, (long) counts.take());
+
+        
+        RedisPubSubConnection<String,String> publisher = client.connectPubSub(); //fails
+        //RedisConnection<String,String> publisher = client.connect(); // success
+        
+        int numToPublish = 200;
+        for(int i = 0;i < numToPublish;i++) {
+        	publisher.publish(channel, resonablyLongMessage + " " + i);
+        }
+        
+        int numReceived = 0;
+        while(numReceived < numToPublish) {
+        	System.out.println(messages.take());
+        	numReceived++;
+        }
+
+        pubsub.unsubscribe(channel);
+
+        assertEquals(numToPublish, numReceived);
+    }
 
     @Test(timeout = 1000)
     public void removeListener() throws Exception {
@@ -236,4 +271,6 @@ public class PubSubCommandTest extends AbstractCommandTest implements RedisPubSu
         patterns.add(pattern);
         counts.add(count);
     }
+    
+    
 }
